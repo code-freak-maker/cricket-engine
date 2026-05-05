@@ -1,10 +1,19 @@
 // services/sheets.js
 const { google } = require("googleapis");
 
-const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+if (!process.env.GOOGLE_CREDENTIALS) {
+  throw new Error("GOOGLE_CREDENTIALS is missing in Render environment variables");
+}
 
-credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+let credentials;
 
+try {
+  credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+} catch (err) {
+  throw new Error("GOOGLE_CREDENTIALS is not valid JSON");
+}
+
+credentials.private_key = credentials.private_key.replace(/\\n/g, "\n");
 
 const auth = new google.auth.GoogleAuth({
   credentials,
