@@ -55,7 +55,11 @@ app.listen(PORT, () => {
 // DISCORD CLIENT
 // =====================
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ],
 });
 
 client.commands = new Collection();
@@ -88,6 +92,31 @@ console.log(`📦 Loaded ${commands.length} commands`);
 // =====================
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
+// (async () => {
+//   try {
+//     console.log("🔄 Registering commands...");
+//     console.log("CLIENT_ID:", process.env.CLIENT_ID);
+//     console.log("GUILD_ID:", process.env.NEW_GUILD_ID);
+
+//     await rest.put(
+//       Routes.applicationGuildCommands(
+//         process.env.CLIENT_ID,
+//         process.env.NEW_GUILD_ID
+//       ),
+//       { body: commands }
+//     );
+
+//     console.log("✅ Commands registered!");
+//   } catch (error) {
+//     console.error("❌ Command registration failed:");
+//     console.error(error);
+//   }
+// })();
+
+// =====================
+// READY EVENT
+// =====================
+
 (async () => {
   try {
     console.log("🔄 Registering commands...");
@@ -103,15 +132,19 @@ const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
     );
 
     console.log("✅ Commands registered!");
+    
+    // Verify commands were registered
+    const registeredCommands = await rest.get(
+      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.NEW_GUILD_ID)
+    );
+    console.log("📋 Registered commands on Discord:", registeredCommands.map(cmd => cmd.name));
+    
   } catch (error) {
     console.error("❌ Command registration failed:");
     console.error(error);
   }
 })();
 
-// =====================
-// READY EVENT
-// =====================
 client.once("ready", (c) => {
   console.log("🤖 BOT READY");
   console.log("Bot Tag:", c.user.tag);
@@ -124,6 +157,49 @@ client.once("ready", (c) => {
 
   console.log("⚠️ If your server is NOT listed above → bot is not in that server");
 });
+
+// =====================
+// INTERACTION HANDLER
+// =====================
+// client.on("interactionCreate", async (interaction) => {
+//   if (!interaction.isChatInputCommand()) return;
+
+//   console.log(`📥 Command received: ${interaction.commandName}`);
+//   console.log(`👤 User: ${interaction.user.tag}`);
+//   console.log(`🏠 Guild ID: ${interaction.guildId}`);
+
+//   const command = client.commands.get(interaction.commandName);
+
+//   if (!command) {
+//     console.log("❌ Command not found:", interaction.commandName);
+//     return;
+//   }
+
+//   try {
+//     console.time(`⏱ ${interaction.commandName}`);
+
+//     await command.execute(interaction);
+
+//     console.timeEnd(`⏱ ${interaction.commandName}`);
+//     console.log(`✅ Command executed: ${interaction.commandName}`);
+//   } catch (err) {
+//     console.error(`❌ Command failed: ${interaction.commandName}`);
+//     console.error(err);
+
+//     try {
+//       if (interaction.deferred) {
+//         await interaction.editReply("❌ Error executing command");
+//       } else if (interaction.replied) {
+//         await interaction.followUp("❌ Error executing command");
+//       } else {
+//         await interaction.reply("❌ Error executing command");
+//       }
+//     } catch (e) {
+//       console.error("❌ Failed to send error response:", e);
+//     }
+//   }
+// });
+
 
 // =====================
 // INTERACTION HANDLER
@@ -166,6 +242,7 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 });
+
 
 // =====================
 // LOGIN
