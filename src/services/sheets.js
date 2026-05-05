@@ -1,7 +1,13 @@
 // services/sheets.js
 const { google } = require("googleapis");
+
+const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+
+credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+
+
 const auth = new google.auth.GoogleAuth({
-  keyFile: "credentials.json",
+  credentials,
   scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
 const sheets = google.sheets({ version: "v4", auth });
