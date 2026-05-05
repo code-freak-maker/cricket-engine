@@ -112,7 +112,7 @@ const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 // =====================
 // READY EVENT
 // =====================
-client.once("clientReady", (c) => {
+client.once("ready", (c) => {
   console.log("🤖 BOT READY");
   console.log("Bot Tag:", c.user.tag);
   console.log("Bot ID:", c.user.id);
