@@ -1,82 +1,39 @@
 // src/bot.js
 require("dotenv").config();
+
+const express = require("express");
 const { Client, GatewayIntentBits, Collection, REST, Routes } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
-const express = require("express");
+
+// =====================
+// GLOBAL ERROR HANDLING
+// =====================
+process.on("uncaughtException", (err) => {
+  console.error("🔥 UNCAUGHT EXCEPTION:");
+  console.error(err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("🔥 UNHANDLED REJECTION:");
+  console.error(reason);
+});
+
+// =====================
+// ENV DEBUG (SAFE)
+// =====================
+console.log("ENV CHECK:");
+console.log("DISCORD_TOKEN:", process.env.DISCORD_TOKEN ? "✔ SET" : "❌ MISSING");
+console.log("CLIENT_ID:", process.env.CLIENT_ID ? "✔ SET" : "❌ MISSING");
+console.log("GOOGLE_CREDENTIALS:", process.env.GOOGLE_CREDENTIALS ? "✔ SET" : "❌ MISSING");
+
+// =====================
+// EXPRESS SERVER (REQUIRED FOR RENDER)
+// =====================
 const app = express();
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-client.commands = new Collection();
-
-const commandsPath = path.join(__dirname, "commands");
-const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith(".js"));
-
-const commands = [];
-for (const file of commandFiles) {
-  const command = require(path.join(commandsPath, file));
-  client.commands.set(command.data.name, command);
-  commands.push(command.data.toJSON());
-}
-
-const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
-
-(async () => {
-  try {
-    console.log("🔄 Registering commands...");
-    await rest.put(
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.NEW_GUILD_ID),
-      { body: commands }
-    );
-    console.log("✅ Commands registered!");
-  } catch (error) {
-    console.error(error);
-  }
-})();
-
-// ✅ CORRECT PLACEMENT: Define the interaction handler AFTER client is created
-client.on("interactionCreate", async interaction => {
-  if (!interaction.isChatInputCommand()) return;
-
-  const command = client.commands.get(interaction.commandName);
-  if (!command) return;
-
-  try {
-    await command.execute(interaction);
-  } catch (err) {
-    console.error(`Error executing ${interaction.commandName}:`, err);
-
-    // Special handling for token expiration (50027 error)
-    if (err.code === 50027) {
-      try {
-        await interaction.channel.send({
-          content: "⚠️ Command took too long to complete. Results have been posted in the channel if successful."
-        });
-      } catch (e) {
-        console.error("Could not send timeout message:", e);
-      }
-      return;
-    }
-
-    const errorMessage = "❌ Error executing command. Please try again.";
-
-    if (interaction.deferred) {
-      await interaction.editReply(errorMessage).catch(console.error);
-    } else if (interaction.replied) {
-      await interaction.followUp({ content: errorMessage, ephemeral: true }).catch(console.error);
-    } else {
-      await interaction.reply({ content: errorMessage, ephemeral: true }).catch(console.error);
-    }
-  }
-});
-
-client.once("ready", (c) => {
-  console.log(`🤖 Logged in as ${c.user.tag}`);
-});
-
-
 app.get("/", (req, res) => {
-  res.send("Cricket bot is running");
+  res.send("🏏 Cricket Bot is running");
 });
 
 const PORT = process.env.PORT || 3000;
@@ -85,4 +42,110 @@ app.listen(PORT, () => {
   console.log(`🌐 Server running on port ${PORT}`);
 });
 
+// =====================
+// DISCORD CLIENT
+// =====================
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds],
+});
+
+client.commands = new Collection();
+
+// =====================
+// LOAD COMMANDS
+// =====================
+const commandsPath = path.join(__dirname, "commands");
+
+if (!fs.existsSync(commandsPath)) {
+  console.error("❌ Commands folder not found!");
+}
+
+const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith(".js"));
+
+const commands = [];
+
+for (const file of commandFiles) {
+  const command = require(path.join(commandsPath, file));
+  client.commands.set(command.data.name, command);
+  commands.push(command.data.toJSON());
+}
+
+console.log(`📦 Loaded ${commands.length} commands`);
+
+// =====================
+// REGISTER COMMANDS
+// =====================
+const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
+
+(async () => {
+  try {
+    console.log("🔄 Registering commands...");
+
+    await rest.put(
+      Routes.applicationGuildCommands(
+        process.env.CLIENT_ID,
+        process.env.NEW_GUILD_ID
+      ),
+      { body: commands }
+    );
+
+    console.log("✅ Commands registered!");
+  } catch (error) {
+    console.error("❌ Command registration failed:");
+    console.error(error);
+  }
+})();
+
+// =====================
+// INTERACTION HANDLER
+// =====================
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+
+  console.log(`📥 Command received: ${interaction.commandName}`);
+  console.log(`👤 User: ${interaction.user.tag}`);
+
+  const command = client.commands.get(interaction.commandName);
+
+  if (!command) {
+    console.log("❌ Command not found:", interaction.commandName);
+    return;
+  }
+
+  try {
+    console.time(`⏱ ${interaction.commandName}`);
+
+    await command.execute(interaction);
+
+    console.timeEnd(`⏱ ${interaction.commandName}`);
+
+    console.log(`✅ Command executed: ${interaction.commandName}`);
+  } catch (err) {
+    console.error(`❌ Command failed: ${interaction.commandName}`);
+    console.error(err);
+
+    try {
+      if (interaction.deferred) {
+        await interaction.editReply("❌ Error executing command");
+      } else {
+        await interaction.reply("❌ Error executing command");
+      }
+    } catch (e) {
+      console.error("❌ Failed to send error reply:", e);
+    }
+  }
+});
+
+// =====================
+// READY EVENT (FIXED)
+// =====================
+client.once("clientReady", (c) => {
+  console.log("🤖 BOT READY");
+  console.log("Logged in as:", c.user.tag);
+  console.log("Bot ID:", c.user.id);
+});
+
+// =====================
+// LOGIN
+// =====================
 client.login(process.env.DISCORD_TOKEN);
