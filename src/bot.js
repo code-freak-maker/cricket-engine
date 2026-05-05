@@ -1,8 +1,10 @@
-// bot.js
+// src/bot.js
 require("dotenv").config();
 const { Client, GatewayIntentBits, Collection, REST, Routes } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
+const express = require("express");
+const app = express();
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 client.commands = new Collection();
@@ -35,15 +37,15 @@ const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 // ✅ CORRECT PLACEMENT: Define the interaction handler AFTER client is created
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
-  
+
   const command = client.commands.get(interaction.commandName);
   if (!command) return;
-  
+
   try {
     await command.execute(interaction);
   } catch (err) {
     console.error(`Error executing ${interaction.commandName}:`, err);
-    
+
     // Special handling for token expiration (50027 error)
     if (err.code === 50027) {
       try {
@@ -55,9 +57,9 @@ client.on("interactionCreate", async interaction => {
       }
       return;
     }
-    
+
     const errorMessage = "❌ Error executing command. Please try again.";
-    
+
     if (interaction.deferred) {
       await interaction.editReply(errorMessage).catch(console.error);
     } else if (interaction.replied) {
@@ -68,8 +70,19 @@ client.on("interactionCreate", async interaction => {
   }
 });
 
-client.once("clientReady", (c) => {
+client.once("ready", (c) => {
   console.log(`🤖 Logged in as ${c.user.tag}`);
+});
+
+
+app.get("/", (req, res) => {
+  res.send("Cricket bot is running");
+});
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`🌐 Server running on port ${PORT}`);
 });
 
 client.login(process.env.DISCORD_TOKEN);
